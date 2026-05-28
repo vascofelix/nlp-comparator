@@ -1,5 +1,6 @@
 import json
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Optional
 import urllib.request
@@ -34,12 +35,24 @@ class NlpResult:
         }
 
 
+def _build_multipart(text: str, filename: str = "input.txt") -> tuple:
+    boundary = uuid.uuid4().hex
+    text_bytes = text.encode("utf-8")
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: text/plain\r\n\r\n"
+    ).encode("utf-8") + text_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    content_type = f"multipart/form-data; boundary={boundary}"
+    return body, content_type
+
+
 def call_nlp(url: str, text: str) -> NlpResult:
-    body = text.encode("utf-8")
+    body, content_type = _build_multipart(text)
     req = urllib.request.Request(
         url,
         data=body,
-        headers={"Content-Type": "text/plain", "Content-Length": str(len(body))},
+        headers={"Content-Type": content_type, "Content-Length": str(len(body))},
         method="POST",
     )
 
@@ -48,15 +61,22 @@ def call_nlp(url: str, text: str) -> NlpResult:
         with urllib.request.urlopen(req, timeout=1200) as resp:
             elapsed = (time.monotonic() - start) * 1000
             data = resp.read().decode("utf-8")
-            entities = json.loads(data)
+            parsed = json.loads(data)
+
+            if isinstance(parsed, dict) and "entities" in parsed:
+                entities = parsed["entities"]
+                body_timing = parsed.get("timing", {})
+            else:
+                entities = parsed
+                body_timing = {}
 
             model_ms = resp.headers.get("X-Model-Ms")
             postprocess_ms = resp.headers.get("X-PostProcess-Ms")
 
             return NlpResult(
                 entities=entities,
-                model_ms=float(model_ms) if model_ms else None,
-                postprocess_ms=float(postprocess_ms) if postprocess_ms else None,
+                model_ms=float(model_ms) if model_ms else body_timing.get("model_ms"),
+                postprocess_ms=float(postprocess_ms) if postprocess_ms else body_timing.get("postprocess_ms"),
                 total_ms=round(elapsed, 2),
                 status=resp.status,
             )
