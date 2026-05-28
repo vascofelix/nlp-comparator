@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NLP Comparator</title>
+<title>Comparador de performance</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; padding: 2rem; max-width: 1200px; margin: 0 auto; }
@@ -18,7 +18,7 @@
   input:focus { outline: none; border-color: #4a7cff; box-shadow: 0 0 0 2px rgba(74,124,255,0.15); }
 
   .url-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-  .runs-row { max-width: 120px; margin-bottom: 1rem; }
+  .runs-row { max-width: 160px; margin-bottom: 1rem; }
 
   .file-section { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
   .file-section > div { padding: 0.75rem; border: 1px dashed #ccc; border-radius: 6px; min-height: 80px; }
@@ -44,10 +44,12 @@
 
   #results { margin-top: 2rem; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th, td { text-align: left; padding: 0.45rem 0.75rem; border-bottom: 1px solid #eee; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
+  th, td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #eee; }
   th { background: #f8f9fc; font-weight: 600; color: #555; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; width: 30%; }
+  th:not(:first-child), td:not(:first-child) { text-align: right; }
+  td { font-variant-numeric: tabular-nums; }
   tr.highlight td { background: #f0f4ff; font-weight: 600; }
 
   .diff-pos { color: #d32f2f; }
@@ -57,7 +59,10 @@
   .entity-diff { margin-top: 0.75rem; }
   .entity-diff summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #555; }
   .entity-list { max-height: 300px; overflow-y: auto; font-size: 0.8rem; margin-top: 0.4rem; }
-  .entity-list table { font-size: 0.8rem; }
+  .entity-list table { font-size: 0.8rem; table-layout: auto; }
+  .entity-list th:first-child, .entity-list td:first-child { width: auto; }
+  .entity-list th, .entity-list td { text-align: left; }
+  .entity-list td:last-child { text-align: right; }
   .tag { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
   .tag-a { background: #fce4ec; color: #c62828; }
   .tag-b { background: #e8f5e9; color: #2e7d32; }
@@ -68,38 +73,38 @@
 </head>
 <body>
 
-<h1>NLP Comparator</h1>
+<h1>Comparador NLP</h1>
 
 <div class="card">
   <div class="url-row">
     <div>
-      <label for="url_a">Version A (Stable)</label>
+      <label for="url_a">Versao A (Estavel)</label>
       <input type="text" id="url_a" value="https://iris.sysresearch.org/anonimizador/from-text" readonly>
     </div>
     <div>
-      <label for="url_b">Version B (Dev)</label>
+      <label for="url_b">Versao B (Dev)</label>
       <input type="text" id="url_b" value="https://iris.sysresearch.org/anonimizador-dev/api/nlp" readonly>
     </div>
   </div>
 
   <div class="runs-row">
-    <label for="runs">Runs per file</label>
+    <label for="runs">Execucoes por ficheiro</label>
     <input type="number" id="runs" value="1" min="1" max="10">
   </div>
 
   <div class="file-section">
     <div>
-      <label>Default documents</label>
+      <label>Documentos predefinidos</label>
       <div id="default-docs" class="default-docs"></div>
     </div>
     <div class="upload-area">
-      <label>Upload files</label>
+      <label>Carregar ficheiros</label>
       <input type="file" id="file-upload" multiple accept=".txt">
       <div id="upload-names" style="margin-top:0.4rem; font-size:0.8rem; color:#666;"></div>
     </div>
   </div>
 
-  <button class="run" id="run-btn" onclick="runComparison()">Run Comparison</button>
+  <button class="run" id="run-btn" onclick="runComparison()">Executar Comparacao</button>
   <span class="spinner" id="spinner"></span>
   <div class="status" id="status"></div>
 </div>
@@ -115,14 +120,14 @@ async function loadDefaultDocs() {
     const resp = await fetch('/api/default-docs');
     const docs = await resp.json();
     if (!docs.length) {
-      container.innerHTML = '<span class="no-defaults">No default documents yet. Add .txt files to default_docs/</span>';
+      container.innerHTML = '<span class="no-defaults">Sem documentos predefinidos. Adicione ficheiros .txt a default_docs/</span>';
       return;
     }
     container.innerHTML = docs.map(name =>
       `<label><input type="checkbox" value="${name}"> ${name}</label>`
     ).join('');
   } catch (e) {
-    container.innerHTML = '<span class="no-defaults">Failed to load defaults</span>';
+    container.innerHTML = '<span class="no-defaults">Erro ao carregar documentos predefinidos</span>';
   }
 }
 
@@ -165,7 +170,11 @@ function setStatus(msg, isError) {
 }
 
 function fmtMs(val) {
-  return val != null ? val.toFixed(1) + 'ms' : 'n/a';
+  if (val == null) return 'n/a';
+  const totalSec = Math.floor(val / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = String(totalSec % 60).padStart(2, '0');
+  return `${val.toFixed(1)}ms (${m}m ${s}s)`;
 }
 
 function fmtDiff(a, b) {
@@ -180,19 +189,19 @@ function fmtDiff(a, b) {
 function renderTimingTable(r) {
   const a = r.a, b = r.b;
   const rows = [
-    ['Model inference', a.model_ms, b.model_ms],
-    ['Post-processing', a.postprocess_ms, b.postprocess_ms],
-    ['NLP server total', a.nlp_server_total_ms, b.nlp_server_total_ms],
-    ['Round-trip total', a.total_ms, b.total_ms],
+    ['Inferencia do modelo', a.model_ms, b.model_ms],
+    ['Pos-processamento', a.postprocess_ms, b.postprocess_ms],
+    ['Total servidor NLP', a.nlp_server_total_ms, b.nlp_server_total_ms],
+    ['Total ida e volta', a.total_ms, b.total_ms],
   ];
 
   let html = `<table>
-    <thead><tr><th>Metric</th><th>Version A</th><th>Version B</th><th>Diff (B vs A)</th></tr></thead><tbody>`;
+    <thead><tr><th>Metrica</th><th>Versao A</th><th>Versao B</th><th>Diferenca (B vs A)</th></tr></thead><tbody>`;
   for (const [label, va, vb] of rows) {
-    const cls = label === 'Round-trip total' ? ' class="highlight"' : '';
-    html += `<tr${cls}><td>${label}</td><td class="num">${fmtMs(va)}</td><td class="num">${fmtMs(vb)}</td><td class="num">${fmtDiff(va, vb)}</td></tr>`;
+    const cls = label === 'Total ida e volta' ? ' class="highlight"' : '';
+    html += `<tr${cls}><td>${label}</td><td>${fmtMs(va)}</td><td>${fmtMs(vb)}</td><td>${fmtDiff(va, vb)}</td></tr>`;
   }
-  html += `<tr><td>Entities found</td><td class="num">${a.entity_count}</td><td class="num">${b.entity_count}</td><td></td></tr>`;
+  html += `<tr><td>Entidades encontradas</td><td>${a.entity_count}</td><td>${b.entity_count}</td><td></td></tr>`;
   html += '</tbody></table>';
   return html;
 }
@@ -203,33 +212,33 @@ function renderEntityDiff(diff) {
   const changes = diff.label_changes;
 
   if (!onlyA.length && !onlyB.length && !changes.length) {
-    return `<div class="entity-diff"><p style="color:#2e7d32; font-size:0.85rem;">Entities identical (${diff.common_count} entities)</p></div>`;
+    return `<div class="entity-diff"><p style="color:#2e7d32; font-size:0.85rem;">Entidades identicas (${diff.common_count} entidades)</p></div>`;
   }
 
   let html = '<div class="entity-diff"><details><summary>';
-  html += `${diff.common_count} common, ${onlyA.length} only in A, ${onlyB.length} only in B, ${changes.length} label changes`;
+  html += `${diff.common_count} em comum, ${onlyA.length} so em A, ${onlyB.length} so em B, ${changes.length} mudancas de etiqueta`;
   html += '</summary>';
 
   if (onlyA.length) {
-    html += '<h3>Only in A</h3><div class="entity-list"><table><thead><tr><th>Text</th><th>Label</th><th>Position</th></tr></thead><tbody>';
+    html += '<h3>Apenas em A</h3><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta</th><th>Posicao</th></tr></thead><tbody>';
     for (const e of onlyA) {
-      html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-a">${e.label}</span></td><td class="num">${e.start}-${e.end}</td></tr>`;
+      html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-a">${e.label}</span></td><td>${e.start}-${e.end}</td></tr>`;
     }
     html += '</tbody></table></div>';
   }
 
   if (onlyB.length) {
-    html += '<h3>Only in B</h3><div class="entity-list"><table><thead><tr><th>Text</th><th>Label</th><th>Position</th></tr></thead><tbody>';
+    html += '<h3>Apenas em B</h3><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta</th><th>Posicao</th></tr></thead><tbody>';
     for (const e of onlyB) {
-      html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-b">${e.label}</span></td><td class="num">${e.start}-${e.end}</td></tr>`;
+      html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-b">${e.label}</span></td><td>${e.start}-${e.end}</td></tr>`;
     }
     html += '</tbody></table></div>';
   }
 
   if (changes.length) {
-    html += '<h3>Label changes</h3><div class="entity-list"><table><thead><tr><th>Text</th><th>A label</th><th>B label</th><th>Position</th></tr></thead><tbody>';
+    html += '<h3>Mudanças de tipo</h3><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta A</th><th>Etiqueta B</th><th>Posicao</th></tr></thead><tbody>';
     for (const c of changes) {
-      html += `<tr><td>${esc(c.text)}</td><td><span class="tag tag-a">${c.label_a}</span></td><td><span class="tag tag-b">${c.label_b}</span></td><td class="num">${c.position[0]}-${c.position[1]}</td></tr>`;
+      html += `<tr><td>${esc(c.text)}</td><td><span class="tag tag-a">${c.label_a}</span></td><td><span class="tag tag-b">${c.label_b}</span></td><td>${c.position[0]}-${c.position[1]}</td></tr>`;
     }
     html += '</tbody></table></div>';
   }
@@ -243,22 +252,22 @@ function renderSummary(results) {
   const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 
   const rows = [
-    ['Model inference', avg(vals('model_ms', 'a')), avg(vals('model_ms', 'b'))],
-    ['Post-processing', avg(vals('postprocess_ms', 'a')), avg(vals('postprocess_ms', 'b'))],
-    ['NLP server total', avg(vals('nlp_server_total_ms', 'a')), avg(vals('nlp_server_total_ms', 'b'))],
-    ['Round-trip total', avg(vals('total_ms', 'a')), avg(vals('total_ms', 'b'))],
+    ['Inferencia do modelo', avg(vals('model_ms', 'a')), avg(vals('model_ms', 'b'))],
+    ['Pos-processamento', avg(vals('postprocess_ms', 'a')), avg(vals('postprocess_ms', 'b'))],
+    ['Total servidor NLP', avg(vals('nlp_server_total_ms', 'a')), avg(vals('nlp_server_total_ms', 'b'))],
+    ['Total ida e volta', avg(vals('total_ms', 'a')), avg(vals('total_ms', 'b'))],
   ];
 
   const identical = results.filter(r => !r.entity_diff.only_in_a.length && !r.entity_diff.only_in_b.length && !r.entity_diff.label_changes.length).length;
 
   let html = `<table>
-    <thead><tr><th>Metric (avg)</th><th>Version A</th><th>Version B</th><th>Diff (B vs A)</th></tr></thead><tbody>`;
+    <thead><tr><th>Metrica (media)</th><th>Versao A</th><th>Versao B</th><th>Diferenca (B vs A)</th></tr></thead><tbody>`;
   for (const [label, va, vb] of rows) {
-    const cls = label === 'Round-trip total' ? ' class="highlight"' : '';
-    html += `<tr${cls}><td>${label}</td><td class="num">${fmtMs(va)}</td><td class="num">${fmtMs(vb)}</td><td class="num">${fmtDiff(va, vb)}</td></tr>`;
+    const cls = label === 'Total ida e volta' ? ' class="highlight"' : '';
+    html += `<tr${cls}><td>${label}</td><td>${fmtMs(va)}</td><td>${fmtMs(vb)}</td><td>${fmtDiff(va, vb)}</td></tr>`;
   }
   html += '</tbody></table>';
-  html += `<p style="margin-top:0.75rem; font-size:0.85rem;">Entity agreement: ${identical}/${results.length} files produced identical entities</p>`;
+  html += `<p style="margin-top:0.75rem; font-size:0.85rem;">Concordancia de entidades: ${identical}/${results.length} ficheiros produziram entidades identicas</p>`;
   return html;
 }
 
@@ -273,22 +282,22 @@ async function runComparison() {
   const url_b = document.getElementById('url_b').value.trim();
   const runs = parseInt(document.getElementById('runs').value) || 1;
 
-  if (!url_a || !url_b) { setStatus('Both URLs are required.', true); return; }
+  if (!url_a || !url_b) { setStatus('Ambos os URLs sao obrigatorios.', true); return; }
 
   setLoading(true);
-  setStatus('Collecting files...');
+  setStatus('A recolher ficheiros...');
 
   let files;
   try {
     files = await getFileTexts();
   } catch (e) {
-    setStatus('Error reading files: ' + e.message, true);
+    setStatus('Erro ao ler ficheiros: ' + e.message, true);
     setLoading(false);
     return;
   }
-  if (!files.length) { setStatus('Select or upload at least one file.', true); setLoading(false); return; }
+  if (!files.length) { setStatus('Selecione ou carregue pelo menos um ficheiro.', true); setLoading(false); return; }
 
-  setStatus(`Running comparison on ${files.length} file(s), ${runs} run(s) each... This may take a while.`);
+  setStatus(`A executar comparacao em ${files.length} ficheiro(s), ${runs} execucao(oes) cada... Pode demorar.`);
 
   try {
     const resp = await fetch('/api/compare', {
@@ -299,16 +308,16 @@ async function runComparison() {
 
     if (!resp.ok) {
       const err = await resp.json();
-      setStatus('Error: ' + (err.error || resp.statusText), true);
+      setStatus('Erro: ' + (err.error || resp.statusText), true);
       setLoading(false);
       return;
     }
 
     const results = await resp.json();
     renderResults(results);
-    setStatus(`Done. ${results.length} file(s) compared.`);
+    setStatus(`Concluido. ${results.length} ficheiro(s) comparado(s).`);
   } catch (e) {
-    setStatus('Request failed: ' + e.message, true);
+    setStatus('Pedido falhou: ' + e.message, true);
   }
   setLoading(false);
 }
@@ -318,14 +327,14 @@ function renderResults(results) {
   let html = '';
 
   if (results.length > 1) {
-    html += `<div class="card summary-card"><h2>Summary (${results.length} files)</h2>`;
+    html += `<div class="card summary-card"><h2>Resumo (${results.length} ficheiros)</h2>`;
     html += renderSummary(results);
     html += '</div>';
   }
 
   for (const r of results) {
     html += `<div class="card">`;
-    html += `<h2>${esc(r.file)} <span style="font-weight:400; font-size:0.85rem; color:#888;">(${r.chars.toLocaleString()} chars${r.runs > 1 ? ', avg of ' + r.runs + ' runs' : ''})</span></h2>`;
+    html += `<h2>${esc(r.file)} <span style="font-weight:400; font-size:0.85rem; color:#888;">(${r.chars.toLocaleString()} caracteres${r.runs > 1 ? ', media de ' + r.runs + ' execucoes' : ''})</span></h2>`;
 
     if (r.a.error) html += `<p class="status error">[A] ${esc(r.a.error)}</p>`;
     if (r.b.error) html += `<p class="status error">[B] ${esc(r.b.error)}</p>`;
