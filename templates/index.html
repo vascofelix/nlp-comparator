@@ -112,12 +112,13 @@
 <div id="results"></div>
 
 <script>
+const BASE = '/nlp-comparator';
 const defaultDocCache = {};
 
 async function loadDefaultDocs() {
   const container = document.getElementById('default-docs');
   try {
-    const resp = await fetch('/api/default-docs');
+    const resp = await fetch(`${BASE}/api/default-docs`);
     const docs = await resp.json();
     if (!docs.length) {
       container.innerHTML = '<span class="no-defaults">Sem documentos predefinidos. Adicione ficheiros .txt a default_docs/</span>';
@@ -143,7 +144,7 @@ async function getFileTexts() {
   for (const cb of checked) {
     const name = cb.value;
     if (!defaultDocCache[name]) {
-      const resp = await fetch(`/api/default-docs/${encodeURIComponent(name)}`);
+      const resp = await fetch(`${BASE}/api/default-docs/${encodeURIComponent(name)}`);
       defaultDocCache[name] = await resp.text();
     }
     files.push({ name, text: defaultDocCache[name] });
@@ -300,7 +301,7 @@ async function runComparison() {
   setStatus(`A executar comparacao em ${files.length} ficheiro(s), ${runs} execucao(oes) cada... Pode demorar.`);
 
   try {
-    const resp = await fetch('/api/compare', {
+    const resp = await fetch(`${BASE}/api/compare`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url_a, url_b, runs, files }),
