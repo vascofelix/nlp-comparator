@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NLP Comparator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.75rem; }
+  h3 { font-size: 1rem; margin: 1rem 0 0.5rem; color: #444; }
+
+  .card { background: #fff; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #555; }
+  input[type="text"], input[type="number"] { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.9rem; }
+  input:focus { outline: none; border-color: #4a7cff; box-shadow: 0 0 0 2px rgba(74,124,255,0.15); }
+
+  .url-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .runs-row { max-width: 120px; margin-bottom: 1rem; }
+
+  .file-section { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .file-section > div { padding: 0.75rem; border: 1px dashed #ccc; border-radius: 6px; min-height: 80px; }
+
+  .default-docs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .default-docs label { display: inline-flex; align-items: center; gap: 0.3rem; font-weight: 400; font-size: 0.85rem; padding: 0.25rem 0.6rem; background: #eef1f6; border-radius: 4px; cursor: pointer; }
+  .default-docs input { margin: 0; }
+  .no-defaults { color: #999; font-size: 0.85rem; font-style: italic; margin-top: 0.5rem; }
+
+  .upload-area input[type="file"] { margin-top: 0.5rem; font-size: 0.85rem; }
+
+  button.run { padding: 0.6rem 1.8rem; background: #4a7cff; color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+  button.run:hover { background: #3a6ae8; }
+  button.run:disabled { background: #a0b4e0; cursor: not-allowed; }
+
+  .spinner { display: none; margin-left: 0.75rem; vertical-align: middle; }
+  .spinner.active { display: inline-block; }
+  .spinner::after { content: ""; display: inline-block; width: 18px; height: 18px; border: 2px solid #ccc; border-top-color: #4a7cff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status { margin-top: 0.75rem; font-size: 0.85rem; color: #666; }
+  .status.error { color: #d32f2f; }
+
+  #results { margin-top: 2rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 0.45rem 0.75rem; border-bottom: 1px solid #eee; }
+  th { background: #f8f9fc; font-weight: 600; color: #555; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.highlight td { background: #f0f4ff; font-weight: 600; }
+
+  .diff-pos { color: #d32f2f; }
+  .diff-neg { color: #2e7d32; }
+  .diff-zero { color: #888; }
+
+  .entity-diff { margin-top: 0.75rem; }
+  .entity-diff summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #555; }
+  .entity-list { max-height: 300px; overflow-y: auto; font-size: 0.8rem; margin-top: 0.4rem; }
+  .entity-list table { font-size: 0.8rem; }
+  .tag { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+  .tag-a { background: #fce4ec; color: #c62828; }
+  .tag-b { background: #e8f5e9; color: #2e7d32; }
+  .tag-change { background: #fff3e0; color: #e65100; }
+
+  .summary-card { background: #f0f4ff; }
+</style>
+</head>
+<body>
+
+<h1>NLP Comparator</h1>
+
+<div class="card">
+  <div class="url-row">
+    <div>
+      <label for="url_a">Version A URL</label>
+      <input type="text" id="url_a" placeholder="https://nlp-v1.example.com">
+    </div>
+    <div>
+      <label for="url_b">Version B URL</label>
+      <input type="text" id="url_b" placeholder="https://nlp-v2.example.com">
+    </div>
+  </div>
+
+  <div class="runs-row">
+    <label for="runs">Runs per file</label>
+    <input type="number" id="runs" value="1" min="1" max="10">
+  </div>
+
+  <div class="file-section">
+    <div>
+      <label>Default documents</label>
+      <div id="default-docs" class="default-docs"></div>
+    </div>
+    <div class="upload-area">
+      <label>Upload files</label>
+      <input type="file" id="file-upload" multiple accept=".txt">
+      <div id="upload-names" style="margin-top:0.4rem; font-size:0.8rem; color:#666;"></div>
+    </div>
+  </div>
+
+  <button class="run" id="run-btn" onclick="runComparison()">Run Comparison</button>
+  <span class="spinner" id="spinner"></span>
+  <div class="status" id="status"></div>
+</div>
+
+<div id="results"></div>
+
+<script>
+const defaultDocCache = {};
+
+async function loadDefaultDocs() {
+  const container = document.getElementById('default-docs');
+  try {
+    const resp = await fetch('/api/default-docs');
+    const docs = await resp.json();
+    if (!docs.length) {
+      container.innerHTML = '<span class="no-defaults">No default documents yet. Add .txt files to default_docs/</span>';
+      return;
+    }
+    container.innerHTML = docs.map(name =>
+      `<label><input type="checkbox" value="${name}"> ${name}</label>`
+    ).join('');
+  } catch (e) {
+    container.innerHTML = '<span class="no-defaults">Failed to load defaults</span>';
+  }
+}
+
+document.getElementById('file-upload').addEventListener('change', function() {
+  const names = Array.from(this.files).map(f => f.name);
+  document.getElementById('upload-names').textContent = names.length ? names.join(', ') : '';
+});
+
+async function getFileTexts() {
+  const files = [];
+
+  const checked = document.querySelectorAll('#default-docs input:checked');
+  for (const cb of checked) {
+    const name = cb.value;
+    if (!defaultDocCache[name]) {
+      const resp = await fetch(`/api/default-docs/${encodeURIComponent(name)}`);
+      defaultDocCache[name] = await resp.text();
+    }
+    files.push({ name, text: defaultDocCache[name] });
+  }
+
+  const uploaded = document.getElementById('file-upload').files;
+  for (const f of uploaded) {
+    const text = await f.text();
+    files.push({ name: f.name, text });
+  }
+
+  return files;
+}
+
+function setLoading(on) {
+  document.getElementById('run-btn').disabled = on;
+  document.getElementById('spinner').classList.toggle('active', on);
+}
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (isError ? ' error' : '');
+}
+
+function fmtMs(val) {
+  return val != null ? val.toFixed(1) + 'ms' : 'n/a';
+}
+
+function fmtDiff(a, b) {
+  if (a == null || b == null) return 'n/a';
+  const diff = b - a;
+  const pct = a > 0 ? ((b - a) / a * 100) : Infinity;
+  const sign = diff >= 0 ? '+' : '';
+  const cls = diff > 0 ? 'diff-pos' : diff < 0 ? 'diff-neg' : 'diff-zero';
+  return `<span class="${cls}">${sign}${diff.toFixed(1)}ms (${sign}${pct.toFixed(1)}%)</span>`;
+}
+
+function renderTimingTable(r) {
+  const a = r.a, b = r.b;
+  const rows = [
+    ['Model inference', a.model_ms, b.model_ms],
+    ['Post-processing', a.postprocess_ms, b.postprocess_ms],
+    ['NLP server total', a.nlp_server_total_ms, b.nlp_server_total_ms],
+    ['Round-trip total', a.total_ms, b.total_ms],
+  ];
+
+  let html = `<table>
+    <thead><tr><th>Metric</th><th>Version A</th><th>Version B</th><th>Diff (B vs A)</th></tr></thead><tbody>`;
+  for (const [label, va, vb] of rows) {
+    const cls = label === 'Round-trip total' ? ' class="highlight"' : '';
+    html += `<tr${cls}><td>${label}</td><td class="num">${fmtMs(va)}</td><td class="num">${fmtMs(vb)}</td><td class="num">${fmtDiff(va, vb)}</td></tr>`;
+  }
+  html += `<tr><td>Entities found</td><td class="num">${a.entity_count}</td><td class="num">${b.entity_count}</td><td></td></tr>`;
+  html += '</tbody></table>';
+  return html;
+}
+
+function renderEntityDiff(diff) {
+  const onlyA = diff.only_in_a;
+  const onlyB = diff.only_in_b;
+  const changes = diff.label_changes;
+
+  if (!onlyA.length && !onlyB.length && !changes.length) {
+    return `<div class="entity-diff"><p style="color:#2e7d32; font-size:0.85rem;">Entities identical (${diff.common_count} entities)</p></div>`;
+  }
+
+  let html = '<div class="entity-diff"><details><summary>';
+  html += `${diff.common_count} common, ${onlyA.length} only in A, ${onlyB.length} only in B, ${changes.length} label changes`;
+  html += '</summary>';
+
+  if (onlyA.length) {
+    html += '<h3>Only in A</h3><div class="entity-list"><table><thead><tr><th>Text</th><th>Label</th><th>Position</th></tr></thead><tbody>';
+    for (const e of onlyA) {
+      html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-a">${e.label}</span></td><td class="num">${e.start}-${e.end}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  if (onlyB.length) {
+    html += '<h3>Only in B</h3><div class="entity-list"><table><thead><tr><th>Text</th><th>Label</th><th>Position</th></tr></thead><tbody>';
+    for (const e of onlyB) {
+      html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-b">${e.label}</span></td><td class="num">${e.start}-${e.end}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  if (changes.length) {
+    html += '<h3>Label changes</h3><div class="entity-list"><table><thead><tr><th>Text</th><th>A label</th><th>B label</th><th>Position</th></tr></thead><tbody>';
+    for (const c of changes) {
+      html += `<tr><td>${esc(c.text)}</td><td><span class="tag tag-a">${c.label_a}</span></td><td><span class="tag tag-b">${c.label_b}</span></td><td class="num">${c.position[0]}-${c.position[1]}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  html += '</details></div>';
+  return html;
+}
+
+function renderSummary(results) {
+  const vals = (key, side) => results.map(r => r[side][key]).filter(v => v != null);
+  const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+  const rows = [
+    ['Model inference', avg(vals('model_ms', 'a')), avg(vals('model_ms', 'b'))],
+    ['Post-processing', avg(vals('postprocess_ms', 'a')), avg(vals('postprocess_ms', 'b'))],
+    ['NLP server total', avg(vals('nlp_server_total_ms', 'a')), avg(vals('nlp_server_total_ms', 'b'))],
+    ['Round-trip total', avg(vals('total_ms', 'a')), avg(vals('total_ms', 'b'))],
+  ];
+
+  const identical = results.filter(r => !r.entity_diff.only_in_a.length && !r.entity_diff.only_in_b.length && !r.entity_diff.label_changes.length).length;
+
+  let html = `<table>
+    <thead><tr><th>Metric (avg)</th><th>Version A</th><th>Version B</th><th>Diff (B vs A)</th></tr></thead><tbody>`;
+  for (const [label, va, vb] of rows) {
+    const cls = label === 'Round-trip total' ? ' class="highlight"' : '';
+    html += `<tr${cls}><td>${label}</td><td class="num">${fmtMs(va)}</td><td class="num">${fmtMs(vb)}</td><td class="num">${fmtDiff(va, vb)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  html += `<p style="margin-top:0.75rem; font-size:0.85rem;">Entity agreement: ${identical}/${results.length} files produced identical entities</p>`;
+  return html;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function runComparison() {
+  const url_a = document.getElementById('url_a').value.trim();
+  const url_b = document.getElementById('url_b').value.trim();
+  const runs = parseInt(document.getElementById('runs').value) || 1;
+
+  if (!url_a || !url_b) { setStatus('Both URLs are required.', true); return; }
+
+  setLoading(true);
+  setStatus('Collecting files...');
+
+  let files;
+  try {
+    files = await getFileTexts();
+  } catch (e) {
+    setStatus('Error reading files: ' + e.message, true);
+    setLoading(false);
+    return;
+  }
+  if (!files.length) { setStatus('Select or upload at least one file.', true); setLoading(false); return; }
+
+  setStatus(`Running comparison on ${files.length} file(s), ${runs} run(s) each... This may take a while.`);
+
+  try {
+    const resp = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url_a, url_b, runs, files }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      setStatus('Error: ' + (err.error || resp.statusText), true);
+      setLoading(false);
+      return;
+    }
+
+    const results = await resp.json();
+    renderResults(results);
+    setStatus(`Done. ${results.length} file(s) compared.`);
+  } catch (e) {
+    setStatus('Request failed: ' + e.message, true);
+  }
+  setLoading(false);
+}
+
+function renderResults(results) {
+  const container = document.getElementById('results');
+  let html = '';
+
+  if (results.length > 1) {
+    html += `<div class="card summary-card"><h2>Summary (${results.length} files)</h2>`;
+    html += renderSummary(results);
+    html += '</div>';
+  }
+
+  for (const r of results) {
+    html += `<div class="card">`;
+    html += `<h2>${esc(r.file)} <span style="font-weight:400; font-size:0.85rem; color:#888;">(${r.chars.toLocaleString()} chars${r.runs > 1 ? ', avg of ' + r.runs + ' runs' : ''})</span></h2>`;
+
+    if (r.a.error) html += `<p class="status error">[A] ${esc(r.a.error)}</p>`;
+    if (r.b.error) html += `<p class="status error">[B] ${esc(r.b.error)}</p>`;
+
+    html += renderTimingTable(r);
+    html += renderEntityDiff(r.entity_diff);
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+loadDefaultDocs();
+</script>
+</body>
+</html>
