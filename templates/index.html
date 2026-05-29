@@ -29,6 +29,8 @@
   .no-defaults { color: #999; font-size: 0.85rem; font-style: italic; margin-top: 0.5rem; }
 
   .upload-area input[type="file"] { margin-top: 0.5rem; font-size: 0.85rem; }
+  .file-item { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.5rem; margin: 0.2rem; background: #eef1f6; border-radius: 4px; font-size: 0.8rem; }
+  .file-item button { border: none; background: none; color: #c62828; cursor: pointer; font-size: 0.9rem; padding: 0 0.2rem; line-height: 1; }
 
   button.run { padding: 0.6rem 1.8rem; background: #4a7cff; color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
   button.run:hover { background: #3a6ae8; }
@@ -58,6 +60,11 @@
 
   .entity-diff { margin-top: 0.75rem; }
   .entity-diff summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #555; }
+  .toggle-bar { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
+  .toggle-btn { padding: 0.3rem 0.7rem; border: 1px solid #ccc; border-radius: 4px; background: #fff; font-size: 0.8rem; cursor: pointer; font-weight: 600; }
+  .toggle-btn.active { border-color: #4a7cff; background: #eef3ff; color: #4a7cff; }
+  .entity-section { display: none; }
+  .entity-section.visible { display: block; }
   .entity-list { max-height: 300px; overflow-y: auto; font-size: 0.8rem; margin-top: 0.4rem; }
   .entity-list table { font-size: 0.8rem; table-layout: auto; }
   .entity-list th:first-child, .entity-list td:first-child { width: auto; }
@@ -100,7 +107,7 @@
     <div class="upload-area">
       <label>Carregar ficheiros</label>
       <input type="file" id="file-upload" multiple accept=".txt">
-      <div id="upload-names" style="margin-top:0.4rem; font-size:0.8rem; color:#666;"></div>
+      <div id="upload-list" style="margin-top:0.4rem; font-size:0.8rem;"></div>
     </div>
   </div>
 
@@ -132,10 +139,28 @@ async function loadDefaultDocs() {
   }
 }
 
-document.getElementById('file-upload').addEventListener('change', function() {
-  const names = Array.from(this.files).map(f => f.name);
-  document.getElementById('upload-names').textContent = names.length ? names.join(', ') : '';
+let uploadedFiles = [];
+
+document.getElementById('file-upload').addEventListener('change', async function() {
+  for (const f of this.files) {
+    const text = await f.text();
+    uploadedFiles.push({ name: f.name, text });
+  }
+  this.value = '';
+  renderUploadList();
 });
+
+function renderUploadList() {
+  const container = document.getElementById('upload-list');
+  container.innerHTML = uploadedFiles.map((f, i) =>
+    `<span class="file-item">${esc(f.name)}<button onclick="removeFile(${i})">x</button></span>`
+  ).join('');
+}
+
+function removeFile(i) {
+  uploadedFiles.splice(i, 1);
+  renderUploadList();
+}
 
 async function getFileTexts() {
   const files = [];
@@ -150,10 +175,8 @@ async function getFileTexts() {
     files.push({ name, text: defaultDocCache[name] });
   }
 
-  const uploaded = document.getElementById('file-upload').files;
-  for (const f of uploaded) {
-    const text = await f.text();
-    files.push({ name: f.name, text });
+  for (const f of uploadedFiles) {
+    files.push({ name: f.name, text: f.text });
   }
 
   return files;
@@ -216,36 +239,47 @@ function renderEntityDiff(diff) {
     return `<div class="entity-diff"><p style="color:#2e7d32; font-size:0.85rem;">Entidades identicas (${diff.common_count} entidades)</p></div>`;
   }
 
-  let html = '<div class="entity-diff"><details><summary>';
-  html += `${diff.common_count} em comum, ${onlyA.length} so em A, ${onlyB.length} so em B, ${changes.length} mudancas de etiqueta`;
-  html += '</summary>';
+  const id = 'diff-' + Math.random().toString(36).slice(2, 8);
+  let html = `<div class="entity-diff">`;
+  html += `<p style="font-size:0.85rem; margin-bottom:0.4rem;">${diff.common_count} em comum, ${onlyA.length} so em A, ${onlyB.length} so em B, ${changes.length} mudancas de etiqueta</p>`;
+  html += `<div class="toggle-bar">`;
+  if (onlyA.length) html += `<button class="toggle-btn active" onclick="toggleSection('${id}-a', this)">Apenas em A (${onlyA.length})</button>`;
+  if (onlyB.length) html += `<button class="toggle-btn active" onclick="toggleSection('${id}-b', this)">Apenas em B (${onlyB.length})</button>`;
+  if (changes.length) html += `<button class="toggle-btn active" onclick="toggleSection('${id}-c', this)">Mudancas de tipo (${changes.length})</button>`;
+  html += `</div>`;
 
   if (onlyA.length) {
-    html += '<h3>Apenas em A</h3><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta</th><th>Posicao</th></tr></thead><tbody>';
+    html += `<div id="${id}-a" class="entity-section visible"><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta</th><th>Posicao</th></tr></thead><tbody>`;
     for (const e of onlyA) {
       html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-a">${e.label}</span></td><td>${e.start}-${e.end}</td></tr>`;
     }
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
   }
 
   if (onlyB.length) {
-    html += '<h3>Apenas em B</h3><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta</th><th>Posicao</th></tr></thead><tbody>';
+    html += `<div id="${id}-b" class="entity-section visible"><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta</th><th>Posicao</th></tr></thead><tbody>`;
     for (const e of onlyB) {
       html += `<tr><td>${esc(e.text)}</td><td><span class="tag tag-b">${e.label}</span></td><td>${e.start}-${e.end}</td></tr>`;
     }
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
   }
 
   if (changes.length) {
-    html += '<h3>Mudanças de tipo</h3><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta A</th><th>Etiqueta B</th><th>Posicao</th></tr></thead><tbody>';
+    html += `<div id="${id}-c" class="entity-section visible"><div class="entity-list"><table><thead><tr><th>Texto</th><th>Etiqueta A</th><th>Etiqueta B</th><th>Posicao</th></tr></thead><tbody>`;
     for (const c of changes) {
       html += `<tr><td>${esc(c.text)}</td><td><span class="tag tag-a">${c.label_a}</span></td><td><span class="tag tag-b">${c.label_b}</span></td><td>${c.position[0]}-${c.position[1]}</td></tr>`;
     }
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
   }
 
-  html += '</details></div>';
+  html += '</div>';
   return html;
+}
+
+function toggleSection(id, btn) {
+  const el = document.getElementById(id);
+  el.classList.toggle('visible');
+  btn.classList.toggle('active');
 }
 
 function renderSummary(results) {
